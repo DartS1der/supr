@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Контроллер Настройки</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 2rem auto; }
+    label { display: block; margin-top: 1rem; }
+    input, textarea { width: 100%; padding: 0.5rem; margin-top: 0.2rem; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; }
+    .status { margin-top: 1rem; color: green; }
+  </style>
+</head>
+<body>
+  <h2>Настройки Контроллера</h2>
+
+  <label>Токен устройства:
+    <input id="token" type="text" placeholder="Введите токен">
+  </label>
+
+  <button onclick="loadSettings()">Загрузить настройки</button>
+
+  <label>Настройки:
+    <textarea id="settings" rows="6" placeholder="Здесь будут настройки..."></textarea>
+  </label>
+
+  <button onclick="saveSettings()">Сохранить настройки</button>
+
+  <div class="status" id="status"></div>
+
+  <script>
+    async function loadSettings() {
+      const token = document.getElementById('token').value;
+      const res = await fetch(`/api/get_settings/${token}`);
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('settings').value = JSON.stringify(data.settings, null, 2);
+        document.getElementById('status').innerText = 'Настройки загружены';
+      } else {
+        document.getElementById('status').innerText = 'Ошибка загрузки';
+      }
+    }
+
+    async function saveSettings() {
+      const token = document.getElementById('token').value;
+      const settings = JSON.parse(document.getElementById('settings').value);
+      const res = await fetch(`/api/update_settings/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings })
+      });
+      if (res.ok) {
+        document.getElementById('status').innerText = 'Настройки сохранены';
+      } else {
+        document.getElementById('status').innerText = 'Ошибка сохранения';
+      }
+    }
+  </script>
+</body>
+</html>
