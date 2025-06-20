@@ -1,55 +1,39 @@
-from fastapi import FastAPI, Depends, HTTPException
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import Column, Integer, String, JSON, create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
 app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# CORS на всякий случай
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-# Настройки базы данных
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Псевдо-хранилище
+settings_db = {
+    "controller1": {"volume": 70, "mode": "auto"},
+    "controller2": {"volume": 20, "mode": "manual"}
+}
 
-class Controller(Base):
-    __tablename__ = "controllers"
-    id = Column(Integer, primary_key=True, index=True)
-    token = Column(String, unique=True, index=True)
-    settings = Column(JSON)
+class SettingsPayload(BaseModel):
+    settings: dict
 
-Base.metadata.create_all(bind=engine)
+@app.get("/controller", response_class=HTMLResponse)
+async def controller_page(request: Request):
+    return templates.TemplateResponse("controller.html", {"request": request})
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@app.get("/user", response_class=HTMLResponse)
+async def user_page(request: Request):
+    return templates.TemplateResponse("user.html", {"request": request})
 
 @app.get("/api/get_settings/{token}")
-async def get_settings(token: str, db: Session = Depends(get_db)):
-    controller = db.query(Controller).filter(Controller.token == token).first()
-    if not controller:
-        raise HTTPException(status_code=404, detail="Контроллер не найден")
-    return {"settings": controller.settings or {}}
+async def get_settings(token: str):
+    return {"settings": settings_db.get(token, {})}
 
 @app.post("/api/update_settings/{token}")
-async def update_settings(token: str, payload: dict, db: Session = Depends(get_db)):
-    controller = db.query(Controller).filter(Controller.token == token).first()
-    if not controller:
-        raise HTTPException(status_code=404, detail="Контроллер не найден")
-    controller.settings = payload["settings"]
-    db.commit()
-    return {"message": "Настройки обновлены"}
-
-# Подключаем интерфейс
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+async def update_settings(token: str, payload: SettingsPayload):
+    settings_db[token] = payload.settings
+    return {"status": "ok"}
